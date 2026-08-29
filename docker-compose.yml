@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: devguard
+      POSTGRES_USER: devguard
+      POSTGRES_PASSWORD: devguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - devguard_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devguard -d devguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      APP_ENV: production
+      SECRET_KEY: devguard-change-me
+      DATABASE_URL: postgresql+psycopg://devguard:devguard@postgres:5432/devguard
+      FRONTEND_ORIGIN: http://localhost:8080
+      LLM_PROVIDER: disabled
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8000
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  devguard_pgdata:
